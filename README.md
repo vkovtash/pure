@@ -22,8 +22,8 @@
 ### Example
 
 ```sh
-$ ln -s "$PWD/functions/fish_prompt.fish" $HOME/.config/fish/functions/fish_prompt.fish
-$ ln -s "$PWD/functions/fish_title.fish" $HOME/.config/fish/functions/fish_title.fish
+$ ln -s "$PWD/functions/fish_prompt.fish" "$HOME/.config/fish/functions/fish_prompt.fish"
+$ ln -s "$PWD/functions/fish_title.fish" "$HOME/.config/fish/functions/fish_title.fish"
 ```
 
 # Options
