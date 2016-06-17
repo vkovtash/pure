@@ -190,8 +190,15 @@ end
 
 function _pure_dirty_mark_completion
     set -g _pure_git_last_dirty_check_timestamp (_pure_timestamp)
-    set -g _pure_git_dirty_files_count $argv[1]
     kill -WINCH %self
+
+    set -l dirty_files_count $argv[1]
+
+    if [ $dirty_files_count -gt 0 ]
+        set -g _pure_git_is_dirty
+    else
+        set -e _pure_git_is_dirty
+    end
 end
 
 
@@ -199,7 +206,7 @@ function _pure_git_info
     if not set -q _pure_git_last_dirty_check_timestamp
         set -g _pure_git_last_dirty_check_timestamp 0
     end
-  
+
     set -l working_tree $argv[1]
     set -l current_timestamp (_pure_timestamp)
     set -l time_since_last_dirty_check (math "$current_timestamp - $_pure_git_last_dirty_check_timestamp")
@@ -213,13 +220,11 @@ function _pure_git_info
     set -l git_branch_name (command git symbolic-ref HEAD ^/dev/null | sed -e 's|^refs/heads/||')
     popd
 
-    if test -n $git_branch_name
+    if [ -n $git_branch_name ]
         set -l git_dirty_mark
-        
-        if set -q _pure_git_dirty_files_count
-            if test $_pure_git_dirty_files_count -gt 0
-                set git_dirty_mark "*"
-            end
+
+        if set -q _pure_git_is_dirty
+            set git_dirty_mark "*"
         end
         echo -n -s $git_branch_name $git_dirty_mark
     end
@@ -236,10 +241,10 @@ function _pure_update_git_last_pwd
     if [ $_pure_git_last_pwd = $working_tree ]
         return 0
     end
- 
+
     # Reset git dirty state on directory change
     set -g _pure_git_last_pwd $working_tree
-    set -e _pure_git_dirty_files_count
+    set -e _pure_git_is_dirty
     set -e _pure_git_last_dirty_check_timestamp
 
     # Mask any failed staruses of set calls
@@ -286,7 +291,7 @@ function fish_prompt
 
     set -l git_working_tree (command git rev-parse --show-toplevel ^/dev/null)
 
-    # Show git branch an status
+    # Show git branch status
     if [ $git_working_tree ]
         _pure_update_git_last_pwd $git_working_tree
         set -l git_info (_pure_git_info $git_working_tree)
@@ -317,4 +322,3 @@ function fish_prompt
     echo -e ''
     echo -e -n -s $prompt_color (_pure_prompt_symbol) " " $normal
 end
-
