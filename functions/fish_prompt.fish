@@ -18,13 +18,13 @@
 #                               Defaults to 10 seconds.
 #
 # PURE_PROMPT_SYMBOL            Defines the prompt symbol. The default value is ❯.
-#                       
+#
 # PURE_GIT_UP_ARROW             Defines the git up arrow symbol. The default value is ⇡.
 #
 # PURE_GIT_DOWN_ARROW           Defines the git down arrow symbol. The default value is ⇣.
 #
 # PURE_GIT_FETCH_INDICATOR      Defines the git fetch proxess indicator symbol.
-#                               The default value is ⇣.
+#                               The default value is •.
 #
 
 
@@ -55,9 +55,16 @@ function _pure_cmd_max_exec_time;           _pure_get_var PURE_CMD_MAX_EXEC_TIME
 function _pure_prompt_symbol;               _pure_get_var PURE_PROMPT_SYMBOL "❯"; end;
 function _pure_git_up_arrow;                _pure_get_var PURE_GIT_UP_ARROW "⇡"; end;
 function _pure_git_down_arrow;              _pure_get_var PURE_GIT_DOWN_ARROW "⇣"; end;
-function _pure_git_fetch_indicator;         _pure_get_var PURE_GIT_FETCH_INDICATOR "⇣"; end;
+function _pure_git_fetch_indicator;         _pure_get_var PURE_GIT_FETCH_INDICATOR "•"; end;
 function _pure_git_fetch_interval;          _pure_get_var PURE_GIT_FETCH_INTERVAL 1800; end;
 function _pure_git_dirty_check_interval;    _pure_get_var PURE_GIT_DIRTY_CHECK_INTERVAL 10; end;
+
+
+function _pure_update_prompt
+    #Don't know why, but calling kill -WINCH directly has no effect
+    set -l cmd "kill -WINCH "(echo %self)
+    fish -c "$cmd" &
+end
 
 
 function _pure_cmd_duration
@@ -72,7 +79,7 @@ function _pure_cmd_duration
     set minutes (math "$full_seconds / 60 % 60")
     set hours (math "$full_seconds / 60 / 60 % 24")
     set days (math "$full_seconds / 60/ 60 /24")
-  
+
     if [ $days -gt 0 ]
         echo -n -s $days "d "
     end
@@ -103,10 +110,12 @@ function unique_async_job
     set -g $job_unique_flag
     set -l async_job_result _async_job_result_(random)
 
+    set -U $async_job_result "…"
+
     fish -c "set -U $async_job_result (eval $cmd)" &
     set -l pid (jobs -l -p)
 
-    function _async_job_$pid -p $pid -V pid -V async_job_result -V callback_function -V job_unique_flag
+    function _async_job_$pid -v $async_job_result -V pid -V async_job_result -V callback_function -V job_unique_flag
         set -e $job_unique_flag
         eval $callback_function $$async_job_result
         functions -e _async_job_$pid
@@ -123,25 +132,26 @@ function _pure_async_git_fetch
     if set -q _pure_git_async_fetch_running
         return 0
     end
-  
+
     set -l working_tree $argv[1]
-    
+
     pushd $working_tree
     if [ ! (command git rev-parse --abbrev-ref @'{u}' ^ /dev/null) ]
         popd
-    return 0
+        return 0
     end
 
     set -l git_fetch_required no
-    if [ ! -e .git/FETCH_HEAD ]
-        set git_fetch_required yes
-    else
+
+    if [ -e .git/FETCH_HEAD ]
         set -l last_fetch_timestamp (command stat -f "%m" .git/FETCH_HEAD)
         set -l current_timestamp (_pure_timestamp)
         set -l time_since_last_fetch (math "$current_timestamp - $last_fetch_timestamp")
         if [ $time_since_last_fetch -gt (_pure_git_fetch_interval) ]
             set git_fetch_required yes
         end
+    else
+        set git_fetch_required yes
     end
 
     if [ $git_fetch_required = no ]
@@ -150,15 +160,14 @@ function _pure_async_git_fetch
     end
 
     set -l cmd "env GIT_TERMINAL_PROMPT=0 command git -c gc.auto=0 fetch > /dev/null ^ /dev/null"
-    unique_async_job "_pure_async_git_fetch_running" "kill -WINCH %self" $cmd
+    unique_async_job "_pure_async_git_fetch_running" _pure_update_prompt $cmd
 
     popd
 end
 
-
 function _pure_git_arrows
     set -l working_tree $argv[1]
-    
+
     pushd $working_tree
     if [ ! (command git rev-parse --abbrev-ref @'{u}' ^ /dev/null) ]
         popd
@@ -183,15 +192,23 @@ function _pure_git_arrows
     if [ $right -gt 0 ]
         set arrows $arrows(_pure_git_down_arrow)
     end
-  
+
     echo $arrows
 end
 
 
 function _pure_dirty_mark_completion
     set -g _pure_git_last_dirty_check_timestamp (_pure_timestamp)
-    set -g _pure_git_dirty_files_count $argv[1]
-    kill -WINCH %self
+
+    set -l dirty_files_count $argv[1]
+
+    if [ $dirty_files_count -gt 0 ]
+        set -g _pure_git_is_dirty
+    else
+        set -e _pure_git_is_dirty
+    end
+
+    _pure_update_prompt
 end
 
 
@@ -199,7 +216,7 @@ function _pure_git_info
     if not set -q _pure_git_last_dirty_check_timestamp
         set -g _pure_git_last_dirty_check_timestamp 0
     end
-  
+
     set -l working_tree $argv[1]
     set -l current_timestamp (_pure_timestamp)
     set -l time_since_last_dirty_check (math "$current_timestamp - $_pure_git_last_dirty_check_timestamp")
@@ -213,13 +230,11 @@ function _pure_git_info
     set -l git_branch_name (command git symbolic-ref HEAD ^/dev/null | sed -e 's|^refs/heads/||')
     popd
 
-    if test -n $git_branch_name
+    if [ -n $git_branch_name ]
         set -l git_dirty_mark
-        
-        if set -q _pure_git_dirty_files_count
-            if test $_pure_git_dirty_files_count -gt 0
-                set git_dirty_mark "*"
-            end
+
+        if set -q _pure_git_is_dirty
+            set git_dirty_mark "*"
         end
         echo -n -s $git_branch_name $git_dirty_mark
     end
@@ -236,10 +251,10 @@ function _pure_update_git_last_pwd
     if [ $_pure_git_last_pwd = $working_tree ]
         return 0
     end
- 
+
     # Reset git dirty state on directory change
     set -g _pure_git_last_pwd $working_tree
-    set -e _pure_git_dirty_files_count
+    set -e _pure_git_is_dirty
     set -e _pure_git_last_dirty_check_timestamp
 
     # Mask any failed staruses of set calls
@@ -286,7 +301,7 @@ function fish_prompt
 
     set -l git_working_tree (command git rev-parse --show-toplevel ^/dev/null)
 
-    # Show git branch an status
+    # Show git branch status
     if [ $git_working_tree ]
         _pure_update_git_last_pwd $git_working_tree
         set -l git_info (_pure_git_info $git_working_tree)
@@ -317,4 +332,3 @@ function fish_prompt
     echo -e ''
     echo -e -n -s $prompt_color (_pure_prompt_symbol) " " $normal
 end
-
