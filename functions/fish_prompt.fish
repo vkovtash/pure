@@ -103,10 +103,12 @@ function unique_async_job
     set -g $job_unique_flag
     set -l async_job_result _async_job_result_(random)
 
+    set -U $async_job_result "…"
+
     fish -c "set -U $async_job_result (eval $cmd)" &
     set -l pid (jobs -l -p)
 
-    function _async_job_$pid -p $pid -V pid -V async_job_result -V callback_function -V job_unique_flag
+    function _async_job_$pid -v $async_job_result -V pid -V async_job_result -V callback_function -V job_unique_flag
         set -e $job_unique_flag
         eval $callback_function $$async_job_result
         functions -e _async_job_$pid
