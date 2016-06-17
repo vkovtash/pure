@@ -60,6 +60,13 @@ function _pure_git_fetch_interval;          _pure_get_var PURE_GIT_FETCH_INTERVA
 function _pure_git_dirty_check_interval;    _pure_get_var PURE_GIT_DIRTY_CHECK_INTERVAL 10; end;
 
 
+function _pure_update_prompt
+    #Don't know why, but calling kill -WINCH directly has no effect
+    set -l cmd "kill -WINCH "(echo %self)
+    fish -c "$cmd" &
+end
+
+
 function _pure_cmd_duration
     set -l duration 0
     if [ $CMD_DURATION ]
@@ -72,7 +79,7 @@ function _pure_cmd_duration
     set minutes (math "$full_seconds / 60 % 60")
     set hours (math "$full_seconds / 60 / 60 % 24")
     set days (math "$full_seconds / 60/ 60 /24")
-  
+
     if [ $days -gt 0 ]
         echo -n -s $days "d "
     end
@@ -103,10 +110,12 @@ function unique_async_job
     set -g $job_unique_flag
     set -l async_job_result _async_job_result_(random)
 
+    set -U $async_job_result "…"
+
     fish -c "set -U $async_job_result (eval $cmd)" &
     set -l pid (jobs -l -p)
 
-    function _async_job_$pid -p $pid -V pid -V async_job_result -V callback_function -V job_unique_flag
+    function _async_job_$pid -v $async_job_result -V pid -V async_job_result -V callback_function -V job_unique_flag
         set -e $job_unique_flag
         eval $callback_function $$async_job_result
         functions -e _async_job_$pid
@@ -123,25 +132,26 @@ function _pure_async_git_fetch
     if set -q _pure_git_async_fetch_running
         return 0
     end
-  
+
     set -l working_tree $argv[1]
-    
+
     pushd $working_tree
     if [ ! (command git rev-parse --abbrev-ref @'{u}' ^ /dev/null) ]
         popd
-    return 0
+        return 0
     end
 
     set -l git_fetch_required no
-    if [ ! -e .git/FETCH_HEAD ]
-        set git_fetch_required yes
-    else
+
+    if [ -e .git/FETCH_HEAD ]
         set -l last_fetch_timestamp (command stat -f "%m" .git/FETCH_HEAD)
         set -l current_timestamp (_pure_timestamp)
         set -l time_since_last_fetch (math "$current_timestamp - $last_fetch_timestamp")
         if [ $time_since_last_fetch -gt (_pure_git_fetch_interval) ]
             set git_fetch_required yes
         end
+    else
+        set git_fetch_required yes
     end
 
     if [ $git_fetch_required = no ]
@@ -150,15 +160,14 @@ function _pure_async_git_fetch
     end
 
     set -l cmd "env GIT_TERMINAL_PROMPT=0 command git -c gc.auto=0 fetch > /dev/null ^ /dev/null"
-    unique_async_job "_pure_async_git_fetch_running" "kill -WINCH %self" $cmd
+    unique_async_job "_pure_async_git_fetch_running" _pure_update_prompt $cmd
 
     popd
 end
 
-
 function _pure_git_arrows
     set -l working_tree $argv[1]
-    
+
     pushd $working_tree
     if [ ! (command git rev-parse --abbrev-ref @'{u}' ^ /dev/null) ]
         popd
@@ -183,14 +192,13 @@ function _pure_git_arrows
     if [ $right -gt 0 ]
         set arrows $arrows(_pure_git_down_arrow)
     end
-  
+
     echo $arrows
 end
 
 
 function _pure_dirty_mark_completion
     set -g _pure_git_last_dirty_check_timestamp (_pure_timestamp)
-    kill -WINCH %self
 
     set -l dirty_files_count $argv[1]
 
@@ -199,6 +207,8 @@ function _pure_dirty_mark_completion
     else
         set -e _pure_git_is_dirty
     end
+
+    _pure_update_prompt
 end
 
 
