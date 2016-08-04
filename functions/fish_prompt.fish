@@ -26,6 +26,9 @@
 # PURE_GIT_FETCH_INDICATOR      Defines the git fetch proxess indicator symbol.
 #                               The default value is •.
 #
+# PURE_ASYNC_TASK               Indicates that current fish instance is created by pure and running
+#                               background async task.
+#
 
 
 function _pure_get_var
@@ -112,6 +115,8 @@ function unique_async_job
 
     set -U $async_job_result "…"
 
+
+    set -lx PURE_ASYNC_TASK 1
     fish -c "set -U $async_job_result (eval $cmd)" &
     set -l pid (jobs -l -p)
 
