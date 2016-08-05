@@ -58,4 +58,9 @@ Defines the git up arrow symbol. The default value is `⇡`.
 
 ### `PURE_GIT_FETCH_INDICATOR`
 
-Defines the git fetch proxess indicator symbol. The default value is `⇣`.
+Defines the git fetch proxess indicator symbol. The default value is `•`.
+
+# FLAGS
+
+### `PURE_ASYNC_TASK`
+Indicates that current fish instance is created by pure and running background async task. Can be used to skip some steps in the config.fish.
