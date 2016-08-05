@@ -233,6 +233,11 @@ function _pure_git_info
     end
 
     set -l git_branch_name (command git symbolic-ref HEAD ^/dev/null | sed -e 's|^refs/heads/||')
+
+    # handle detached HEAD
+    if [ -z $git_branch_name ]
+        set git_branch_name (command git rev-parse --short HEAD ^ /dev/null)
+    end
     popd
 
     if [ -n $git_branch_name ]
