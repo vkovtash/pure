@@ -30,6 +30,9 @@
 #                               background async task.
 #
 
+# Disable virtualenv fish prompt. Pure will handle virtualenv by itself
+set -gx VIRTUAL_ENV_DISABLE_PROMPT 1
+
 
 function _pure_get_var
     set -l var_name $argv[1]
@@ -295,12 +298,21 @@ function fish_prompt
     # Display username and hostname if logged in as root, in sudo or ssh session
     set -l uid (id -u)
 
+    set -l env_description_separator ""
+
     if [ \( $uid -eq 0 -o $SUDO_USER \) -o $SSH_CONNECTION ]
-        echo -n -s $white $USER $gray "@" (command hostname | command cut -f 1 -d ".") " " $normal
+        echo -n -s $white $USER $gray "@" (command hostname | command cut -f 1 -d ".")
+        set env_description_separator " "
+    end
+
+    # Display virtualenv name
+    if set -q VIRTUAL_ENV
+        echo -n -s $gray "(" (command basename "$VIRTUAL_ENV") ")"
+        set env_description_separator " "
     end
 
     # Print pwd or full path
-    echo -n -s $cwd $normal
+    echo -n -s $normal $env_description_separator $cwd
 
     # Print last command duration
     set -l cmd_duration (_pure_cmd_duration)
