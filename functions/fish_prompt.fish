@@ -352,5 +352,8 @@ function fish_prompt
 
     # Terminate with a nice prompt char
     echo -e ''
+    if set -q VIRTUAL_ENV
+        echo -n -s "(" (basename "$VIRTUAL_ENV") ") "
+    end
     echo -e -n -s $prompt_color (_pure_prompt_symbol) " " $normal
 end
