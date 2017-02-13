@@ -152,7 +152,7 @@ function _pure_async_git_fetch
     set -l git_fetch_required no
 
     if [ -e .git/FETCH_HEAD ]
-        set -l last_fetch_timestamp (command stat -f "%m" .git/FETCH_HEAD)
+        set -l last_fetch_timestamp (command stat -c "%Y" .git/FETCH_HEAD)
         set -l current_timestamp (_pure_timestamp)
         set -l time_since_last_fetch (math "$current_timestamp - $last_fetch_timestamp")
         if [ $time_since_last_fetch -gt (_pure_git_fetch_interval) ]
